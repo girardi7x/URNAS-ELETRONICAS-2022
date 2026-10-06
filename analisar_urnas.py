@@ -107,29 +107,22 @@ summary_uf_model["pct_bolsonaro"]=(100*summary_uf_model["votos_bolsonaro"]/denum
 summary_uf_model.to_csv(OUT/"resumo_por_uf_e_modelo_nordeste.csv",index=False,encoding="utf-8-sig")
 
 winner=res["vencedor_13_22"].value_counts(dropna=False)
-with (OUT/"RESUMO_NORDESTE.txt").open("w",encoding="utf-8") as fh:
-    fh.write("Análise 2022 - Nordeste - 1º turno - UE2013/UE2015 com erros_log > 0
-")
-    fh.write(f"Seções encontradas: {len(res)}
 
-")
-    fh.write("Vencedor entre Lula e Bolsonaro por seção:
-")
-    fh.write(winner.to_string())
-    fh.write("
-
-Resumo por modelo:
-")
-    fh.write(summary_model.to_string(index=False))
-    fh.write("
-
-Resumo por UF:
-")
-    fh.write(summary_uf.to_string(index=False))
-    fh.write("
-
-Observação: erros_log vem do .logjez da urna e NÃO é o mesmo que erro de transmissão/RecArquivos.
-")
+summary_text = []
+summary_text.append("Análise 2022 - Nordeste - 1º turno - UE2013/UE2015 com erros_log > 0")
+summary_text.append(f"Seções encontradas: {len(res)}")
+summary_text.append("")
+summary_text.append("Vencedor entre Lula e Bolsonaro por seção:")
+summary_text.append(winner.to_string())
+summary_text.append("")
+summary_text.append("Resumo por modelo:")
+summary_text.append(summary_model.to_string(index=False))
+summary_text.append("")
+summary_text.append("Resumo por UF:")
+summary_text.append(summary_uf.to_string(index=False))
+summary_text.append("")
+summary_text.append("Observação: erros_log vem do .logjez da urna e NÃO é o mesmo que erro de transmissão/RecArquivos.")
+(OUT/"RESUMO_NORDESTE.txt").write_text("\n".join(summary_text), encoding="utf-8")
 
 print(summary_model.to_string(index=False))
 print(summary_uf.to_string(index=False))
