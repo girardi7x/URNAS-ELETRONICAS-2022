@@ -71,8 +71,8 @@ res=target.merge(pv,left_on="id",right_on="secao_id",how="left")
 res["lula_13"]=res["lula_13"].fillna(0).astype(int)
 res["bolsonaro_22"]=res["bolsonaro_22"].fillna(0).astype(int)
 res["dois_candidatos"]=res["lula_13"]+res["bolsonaro_22"]
-res["pct_lula_entre_13_22"]=(100*res["lula_13"]/res["dois_candidatos"].replace(0,pd.NA)).round(2)
-res["pct_bolsonaro_entre_13_22"]=(100*res["bolsonaro_22"]/res["dois_candidatos"].replace(0,pd.NA)).round(2)
+den=res["dois_candidatos"].astype(float).replace(0,float("nan"))\nres["pct_lula_entre_13_22"]=(100*res["lula_13"]/den).round(2)
+res["pct_bolsonaro_entre_13_22"]=(100*res["bolsonaro_22"]/den).round(2)
 res["vencedor_13_22"]=res.apply(lambda r:"Lula" if r["lula_13"]>r["bolsonaro_22"] else ("Bolsonaro" if r["bolsonaro_22"]>r["lula_13"] else "Empate"),axis=1)
 
 cols=[c for c in ["id","uf","municipio","zona","secao","modelo_urna","tipo_urna","versao_sw","eleitores_aptos","comparecimento","reboots","erros_log","alertas_mesario","substituicoes","has_issues","n_issues","lula_13","bolsonaro_22","pct_lula_entre_13_22","pct_bolsonaro_entre_13_22","vencedor_13_22"] if c in res.columns]
@@ -82,24 +82,24 @@ summary_model=(res.groupby("modelo_urna",dropna=False)
                .agg(secoes=("id","count"),soma_erros=("erros_num","sum"),votos_lula=("lula_13","sum"),votos_bolsonaro=("bolsonaro_22","sum"))
                .reset_index())
 summary_model["total_13_22"]=summary_model["votos_lula"]+summary_model["votos_bolsonaro"]
-summary_model["pct_lula"]=(100*summary_model["votos_lula"]/summary_model["total_13_22"].replace(0,pd.NA)).round(2)
-summary_model["pct_bolsonaro"]=(100*summary_model["votos_bolsonaro"]/summary_model["total_13_22"].replace(0,pd.NA)).round(2)
+denm=summary_model["total_13_22"].astype(float).replace(0,float("nan"))\nsummary_model["pct_lula"]=(100*summary_model["votos_lula"]/denm).round(2)
+summary_model["pct_bolsonaro"]=(100*summary_model["votos_bolsonaro"]/denm).round(2)
 summary_model.to_csv(OUT/"resumo_por_modelo_nordeste.csv",index=False,encoding="utf-8-sig")
 
 summary_uf=(res.groupby("uf",dropna=False)
             .agg(secoes=("id","count"),soma_erros=("erros_num","sum"),votos_lula=("lula_13","sum"),votos_bolsonaro=("bolsonaro_22","sum"))
             .reset_index())
 summary_uf["total_13_22"]=summary_uf["votos_lula"]+summary_uf["votos_bolsonaro"]
-summary_uf["pct_lula"]=(100*summary_uf["votos_lula"]/summary_uf["total_13_22"].replace(0,pd.NA)).round(2)
-summary_uf["pct_bolsonaro"]=(100*summary_uf["votos_bolsonaro"]/summary_uf["total_13_22"].replace(0,pd.NA)).round(2)
+denu=summary_uf["total_13_22"].astype(float).replace(0,float("nan"))\nsummary_uf["pct_lula"]=(100*summary_uf["votos_lula"]/denu).round(2)
+summary_uf["pct_bolsonaro"]=(100*summary_uf["votos_bolsonaro"]/denu).round(2)
 summary_uf.to_csv(OUT/"resumo_por_uf_nordeste.csv",index=False,encoding="utf-8-sig")
 
 summary_uf_model=(res.groupby(["uf","modelo_urna"],dropna=False)
                   .agg(secoes=("id","count"),soma_erros=("erros_num","sum"),votos_lula=("lula_13","sum"),votos_bolsonaro=("bolsonaro_22","sum"))
                   .reset_index())
 summary_uf_model["total_13_22"]=summary_uf_model["votos_lula"]+summary_uf_model["votos_bolsonaro"]
-summary_uf_model["pct_lula"]=(100*summary_uf_model["votos_lula"]/summary_uf_model["total_13_22"].replace(0,pd.NA)).round(2)
-summary_uf_model["pct_bolsonaro"]=(100*summary_uf_model["votos_bolsonaro"]/summary_uf_model["total_13_22"].replace(0,pd.NA)).round(2)
+denum=summary_uf_model["total_13_22"].astype(float).replace(0,float("nan"))\nsummary_uf_model["pct_lula"]=(100*summary_uf_model["votos_lula"]/denum).round(2)
+summary_uf_model["pct_bolsonaro"]=(100*summary_uf_model["votos_bolsonaro"]/denum).round(2)
 summary_uf_model.to_csv(OUT/"resumo_por_uf_e_modelo_nordeste.csv",index=False,encoding="utf-8-sig")
 
 winner=res["vencedor_13_22"].value_counts(dropna=False)
