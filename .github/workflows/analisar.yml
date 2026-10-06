@@ -1,0 +1,24 @@
+name: Analisar urnas 2022 RS
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  analisar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Instalar dependências
+        run: pip install pandas pyarrow requests
+      - name: Processar dados
+        run: python analisar_urnas.py
+      - name: Publicar resultados
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-urnas-2022-rs
+          path: resultado/
