@@ -3,62 +3,40 @@ import requests
 from pathlib import Path
 
 BASE = "https://raw.githubusercontent.com/alissonlinneker/DataUrnas-BR/main/data/parquet"
-FILES = ["secoes.parquet", "issues.parquet", "votos_t1_a.parquet", "votos_t1_b.parquet"]
+FILES = ["secoes.parquet", "votos_t1_a.parquet", "votos_t1_b.parquet"]
 OUT = Path("resultado")
 OUT.mkdir(exist_ok=True)
+NORDESTE = ["AL","BA","CE","MA","PB","PE","PI","RN","SE"]
 
 for name in FILES:
     p = Path(name)
     if not p.exists():
-        print(f"Baixando {name}...")
         with requests.get(f"{BASE}/{name}", stream=True, timeout=240) as r:
             r.raise_for_status()
             with p.open("wb") as fh:
                 for chunk in r.iter_content(chunk_size=1024*1024):
-                    if chunk:
-                        fh.write(chunk)
-
-NORDESTE = ["AL","BA","CE","MA","PB","PE","PI","RN","SE"]
+                    if chunk: fh.write(chunk)
 
 sec = pd.read_parquet("secoes.parquet")
-sec["modelo_urna"] = sec["modelo_urna"].astype(str)
 sec["uf"] = sec["uf"].astype(str).str.upper()
 sec["turno_num"] = pd.to_numeric(sec["turno"], errors="coerce")
+sec["modelo_urna"] = pd.to_numeric(sec["modelo_urna"], errors="coerce")
 sec["erros_num"] = pd.to_numeric(sec["erros_log"], errors="coerce").fillna(0)
-sec["modelo_norm"] = sec["modelo_urna"].str.upper().str.replace(" ", "", regex=False)
 
-ne = sec[(sec["turno_num"]==1) & (sec["uf"].isin(NORDESTE))].copy()
+ne = sec[(sec["turno_num"]==1) & (sec["uf"].isin(NORDESTE)) & (sec["modelo_urna"].isin([2013,2015,2020]))].copy()
+ne["grupo_modelo"] = ne["modelo_urna"].map({2013:"2013/2015",2015:"2013/2015",2020:"2020"})
 
-diag=(ne.groupby(["uf","modelo_urna"])
-      .agg(secoes=("id","count"),
-           com_erro=("erros_num",lambda s:(s>0).sum()),
-           soma_erros=("erros_num","sum"))
-      .reset_index())
-diag["pct_com_erro"]=(100*diag["com_erro"]/diag["secoes"]).round(2)
-diag.to_csv(OUT/"diagnostico_modelos_nordeste.csv",index=False,encoding="utf-8-sig")
-
-target = ne[
-    ne["modelo_norm"].str.contains("2013|2015", regex=True, na=False) &
-    (ne["erros_num"] > 0)
-].copy()
-ids=set(target["id"].astype(str))
-print("Seções alvo Nordeste UE2013/UE2015 com erro:",len(target))
-
-issues=pd.read_parquet("issues.parquet")
-issues["secao_id"]=issues["secao_id"].astype(str)
-iss=issues[issues["secao_id"].isin(ids)].copy()
-iss.to_csv(OUT/"issues_ue2013_ue2015_nordeste.csv",index=False,encoding="utf-8-sig")
-
-va=pd.read_parquet("votos_t1_a.parquet")
-vb=pd.read_parquet("votos_t1_b.parquet")
-v=pd.concat([va,vb],ignore_index=True)
-v["secao_id"]=v["secao_id"].astype(str)
-v=v[v["secao_id"].isin(ids)].copy()
-cargo=v["cargo"].astype(str).str.upper()
-pres=v[cargo.str.contains("PRESIDENT",na=False)].copy()
-pres["codigo_candidato"]=pd.to_numeric(pres["codigo_candidato"],errors="coerce")
-pres["quantidade"]=pd.to_numeric(pres["quantidade"],errors="coerce").fillna(0)
-nom=pres[pres["tipo_voto"].astype(str).str.lower().eq("nominal")].copy()
+ids = set(ne["id"].astype(str))
+va = pd.read_parquet("votos_t1_a.parquet")
+vb = pd.read_parquet("votos_t1_b.parquet")
+v = pd.concat([va,vb], ignore_index=True)
+v["secao_id"] = v["secao_id"].astype(str)
+v = v[v["secao_id"].isin(ids)].copy()
+cargo = v["cargo"].astype(str).str.upper()
+pres = v[cargo.str.contains("PRESIDENT", na=False)].copy()
+pres["codigo_candidato"] = pd.to_numeric(pres["codigo_candidato"], errors="coerce")
+pres["quantidade"] = pd.to_numeric(pres["quantidade"], errors="coerce").fillna(0)
+nom = pres[pres["tipo_voto"].astype(str).str.lower().eq("nominal")].copy()
 
 pv=(nom[nom["codigo_candidato"].isin([13,22])]
     .pivot_table(index="secao_id",columns="codigo_candidato",values="quantidade",aggfunc="sum",fill_value=0)
@@ -67,63 +45,62 @@ pv=(nom[nom["codigo_candidato"].isin([13,22])]
 for c in ["lula_13","bolsonaro_22"]:
     if c not in pv.columns: pv[c]=0
 
-res=target.merge(pv,left_on="id",right_on="secao_id",how="left")
+res = ne.merge(pv,left_on="id",right_on="secao_id",how="left")
 res["lula_13"]=res["lula_13"].fillna(0).astype(int)
 res["bolsonaro_22"]=res["bolsonaro_22"].fillna(0).astype(int)
-res["dois_candidatos"]=res["lula_13"]+res["bolsonaro_22"]
-den=res["dois_candidatos"].astype(float).replace(0,float("nan"))
-res["pct_lula_entre_13_22"]=(100*res["lula_13"]/den).round(2)
-res["pct_bolsonaro_entre_13_22"]=(100*res["bolsonaro_22"]/den).round(2)
-res["vencedor_13_22"]=res.apply(lambda r:"Lula" if r["lula_13"]>r["bolsonaro_22"] else ("Bolsonaro" if r["bolsonaro_22"]>r["lula_13"] else "Empate"),axis=1)
+res["total_13_22"]=res["lula_13"]+res["bolsonaro_22"]
+res["pct_lula_secao"]=100*res["lula_13"]/res["total_13_22"].replace(0,float("nan"))
 
-cols=[c for c in ["id","uf","municipio","zona","secao","modelo_urna","tipo_urna","versao_sw","eleitores_aptos","comparecimento","reboots","erros_log","alertas_mesario","substituicoes","has_issues","n_issues","lula_13","bolsonaro_22","pct_lula_entre_13_22","pct_bolsonaro_entre_13_22","vencedor_13_22"] if c in res.columns]
-res[cols].sort_values(["uf","modelo_urna","municipio","zona","secao"]).to_csv(OUT/"secoes_com_erros_e_votos_nordeste.csv",index=False,encoding="utf-8-sig")
+def summarize(df, by):
+    g=(df.groupby(by,dropna=False)
+       .agg(secoes=("id","count"),
+            com_erro=("erros_num",lambda s:(s>0).sum()),
+            soma_erros=("erros_num","sum"),
+            votos_lula=("lula_13","sum"),
+            votos_bolsonaro=("bolsonaro_22","sum"))
+       .reset_index())
+    g["total_13_22"]=g["votos_lula"]+g["votos_bolsonaro"]
+    den=g["total_13_22"].astype(float).replace(0,float("nan"))
+    g["pct_lula"]=(100*g["votos_lula"]/den).round(2)
+    g["pct_bolsonaro"]=(100*g["votos_bolsonaro"]/den).round(2)
+    g["pct_secoes_com_erro"]=(100*g["com_erro"]/g["secoes"]).round(2)
+    return g
 
-summary_model=(res.groupby("modelo_urna",dropna=False)
-               .agg(secoes=("id","count"),soma_erros=("erros_num","sum"),votos_lula=("lula_13","sum"),votos_bolsonaro=("bolsonaro_22","sum"))
-               .reset_index())
-summary_model["total_13_22"]=summary_model["votos_lula"]+summary_model["votos_bolsonaro"]
-denm=summary_model["total_13_22"].astype(float).replace(0,float("nan"))
-summary_model["pct_lula"]=(100*summary_model["votos_lula"]/denm).round(2)
-summary_model["pct_bolsonaro"]=(100*summary_model["votos_bolsonaro"]/denm).round(2)
-summary_model.to_csv(OUT/"resumo_por_modelo_nordeste.csv",index=False,encoding="utf-8-sig")
+summarize(res,["grupo_modelo"]).to_csv(OUT/"comparacao_modelos_nordeste.csv",index=False,encoding="utf-8-sig")
+summarize(res,["uf","grupo_modelo"]).to_csv(OUT/"comparacao_modelos_por_uf.csv",index=False,encoding="utf-8-sig")
+summarize(res,["modelo_urna"]).to_csv(OUT/"comparacao_modelos_individuais.csv",index=False,encoding="utf-8-sig")
 
-summary_uf=(res.groupby("uf",dropna=False)
-            .agg(secoes=("id","count"),soma_erros=("erros_num","sum"),votos_lula=("lula_13","sum"),votos_bolsonaro=("bolsonaro_22","sum"))
-            .reset_index())
-summary_uf["total_13_22"]=summary_uf["votos_lula"]+summary_uf["votos_bolsonaro"]
-denu=summary_uf["total_13_22"].astype(float).replace(0,float("nan"))
-summary_uf["pct_lula"]=(100*summary_uf["votos_lula"]/denu).round(2)
-summary_uf["pct_bolsonaro"]=(100*summary_uf["votos_bolsonaro"]/denu).round(2)
-summary_uf.to_csv(OUT/"resumo_por_uf_nordeste.csv",index=False,encoding="utf-8-sig")
+# Comparação dentro do mesmo município: média ponderada da diferença do % Lula entre 2020 e 2013/2015.
+mun=(res.groupby(["uf","municipio","grupo_modelo"],dropna=False)
+     .agg(votos_lula=("lula_13","sum"),votos_bolsonaro=("bolsonaro_22","sum"),secoes=("id","count"))
+     .reset_index())
+mun["total"]=mun["votos_lula"]+mun["votos_bolsonaro"]
+mun["pct_lula"]=100*mun["votos_lula"]/mun["total"].replace(0,float("nan"))
+p=mun.pivot_table(index=["uf","municipio"],columns="grupo_modelo",values=["pct_lula","total","secoes"],aggfunc="first")
+p.columns=["_".join(map(str,c)) for c in p.columns]
+p=p.reset_index()
+needed=["pct_lula_2013/2015","pct_lula_2020","total_2013/2015","total_2020"]
+for c in needed:
+    if c not in p.columns: p[c]=pd.NA
+p=p.dropna(subset=["pct_lula_2013/2015","pct_lula_2020"]).copy()
+p["dif_pct_lula_2020_menos_antigas"]=p["pct_lula_2020"]-p["pct_lula_2013/2015"]
+p["peso"]=p[["total_2013/2015","total_2020"]].min(axis=1)
+p.to_csv(OUT/"comparacao_mesmo_municipio.csv",index=False,encoding="utf-8-sig")
 
-summary_uf_model=(res.groupby(["uf","modelo_urna"],dropna=False)
-                  .agg(secoes=("id","count"),soma_erros=("erros_num","sum"),votos_lula=("lula_13","sum"),votos_bolsonaro=("bolsonaro_22","sum"))
-                  .reset_index())
-summary_uf_model["total_13_22"]=summary_uf_model["votos_lula"]+summary_uf_model["votos_bolsonaro"]
-denum=summary_uf_model["total_13_22"].astype(float).replace(0,float("nan"))
-summary_uf_model["pct_lula"]=(100*summary_uf_model["votos_lula"]/denum).round(2)
-summary_uf_model["pct_bolsonaro"]=(100*summary_uf_model["votos_bolsonaro"]/denum).round(2)
-summary_uf_model.to_csv(OUT/"resumo_por_uf_e_modelo_nordeste.csv",index=False,encoding="utf-8-sig")
+weighted=(p["dif_pct_lula_2020_menos_antigas"]*p["peso"]).sum()/p["peso"].sum()
+simple=p["dif_pct_lula_2020_menos_antigas"].mean()
+median=p["dif_pct_lula_2020_menos_antigas"].median()
+share_pos=(p["dif_pct_lula_2020_menos_antigas"]>0).mean()*100
 
-winner=res["vencedor_13_22"].value_counts(dropna=False)
+with (OUT/"RESUMO_COMPARACAO.txt").open("w",encoding="utf-8") as fh:
+    fh.write("Nordeste 2022 - 1º turno - comparação modelos 2013/2015 vs 2020\n")
+    fh.write(summarize(res,["grupo_modelo"]).to_string(index=False))
+    fh.write("\n\nComparação dentro do mesmo município (Lula % em 2020 menos Lula % em 2013/2015):\n")
+    fh.write(f"Municípios comparáveis: {len(p)}\n")
+    fh.write(f"Diferença média simples: {simple:.3f} p.p.\n")
+    fh.write(f"Diferença mediana: {median:.3f} p.p.\n")
+    fh.write(f"Diferença média ponderada: {weighted:.3f} p.p.\n")
+    fh.write(f"Percentual de municípios em que 2020 teve % Lula maior: {share_pos:.2f}%\n")
 
-summary_text = []
-summary_text.append("Análise 2022 - Nordeste - 1º turno - UE2013/UE2015 com erros_log > 0")
-summary_text.append(f"Seções encontradas: {len(res)}")
-summary_text.append("")
-summary_text.append("Vencedor entre Lula e Bolsonaro por seção:")
-summary_text.append(winner.to_string())
-summary_text.append("")
-summary_text.append("Resumo por modelo:")
-summary_text.append(summary_model.to_string(index=False))
-summary_text.append("")
-summary_text.append("Resumo por UF:")
-summary_text.append(summary_uf.to_string(index=False))
-summary_text.append("")
-summary_text.append("Observação: erros_log vem do .logjez da urna e NÃO é o mesmo que erro de transmissão/RecArquivos.")
-(OUT/"RESUMO_NORDESTE.txt").write_text("\n".join(summary_text), encoding="utf-8")
-
-print(summary_model.to_string(index=False))
-print(summary_uf.to_string(index=False))
-print(winner.to_string())
+print(summarize(res,["grupo_modelo"]).to_string(index=False))
+print("municipios",len(p),"media",simple,"mediana",median,"ponderada",weighted,"sharepos",share_pos)
