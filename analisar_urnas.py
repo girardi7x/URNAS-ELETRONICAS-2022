@@ -71,7 +71,8 @@ res=target.merge(pv,left_on="id",right_on="secao_id",how="left")
 res["lula_13"]=res["lula_13"].fillna(0).astype(int)
 res["bolsonaro_22"]=res["bolsonaro_22"].fillna(0).astype(int)
 res["dois_candidatos"]=res["lula_13"]+res["bolsonaro_22"]
-den=res["dois_candidatos"].astype(float).replace(0,float("nan"))\nres["pct_lula_entre_13_22"]=(100*res["lula_13"]/den).round(2)
+den=res["dois_candidatos"].astype(float).replace(0,float("nan"))
+res["pct_lula_entre_13_22"]=(100*res["lula_13"]/den).round(2)
 res["pct_bolsonaro_entre_13_22"]=(100*res["bolsonaro_22"]/den).round(2)
 res["vencedor_13_22"]=res.apply(lambda r:"Lula" if r["lula_13"]>r["bolsonaro_22"] else ("Bolsonaro" if r["bolsonaro_22"]>r["lula_13"] else "Empate"),axis=1)
 
@@ -82,7 +83,8 @@ summary_model=(res.groupby("modelo_urna",dropna=False)
                .agg(secoes=("id","count"),soma_erros=("erros_num","sum"),votos_lula=("lula_13","sum"),votos_bolsonaro=("bolsonaro_22","sum"))
                .reset_index())
 summary_model["total_13_22"]=summary_model["votos_lula"]+summary_model["votos_bolsonaro"]
-denm=summary_model["total_13_22"].astype(float).replace(0,float("nan"))\nsummary_model["pct_lula"]=(100*summary_model["votos_lula"]/denm).round(2)
+denm=summary_model["total_13_22"].astype(float).replace(0,float("nan"))
+summary_model["pct_lula"]=(100*summary_model["votos_lula"]/denm).round(2)
 summary_model["pct_bolsonaro"]=(100*summary_model["votos_bolsonaro"]/denm).round(2)
 summary_model.to_csv(OUT/"resumo_por_modelo_nordeste.csv",index=False,encoding="utf-8-sig")
 
@@ -90,7 +92,8 @@ summary_uf=(res.groupby("uf",dropna=False)
             .agg(secoes=("id","count"),soma_erros=("erros_num","sum"),votos_lula=("lula_13","sum"),votos_bolsonaro=("bolsonaro_22","sum"))
             .reset_index())
 summary_uf["total_13_22"]=summary_uf["votos_lula"]+summary_uf["votos_bolsonaro"]
-denu=summary_uf["total_13_22"].astype(float).replace(0,float("nan"))\nsummary_uf["pct_lula"]=(100*summary_uf["votos_lula"]/denu).round(2)
+denu=summary_uf["total_13_22"].astype(float).replace(0,float("nan"))
+summary_uf["pct_lula"]=(100*summary_uf["votos_lula"]/denu).round(2)
 summary_uf["pct_bolsonaro"]=(100*summary_uf["votos_bolsonaro"]/denu).round(2)
 summary_uf.to_csv(OUT/"resumo_por_uf_nordeste.csv",index=False,encoding="utf-8-sig")
 
@@ -98,21 +101,35 @@ summary_uf_model=(res.groupby(["uf","modelo_urna"],dropna=False)
                   .agg(secoes=("id","count"),soma_erros=("erros_num","sum"),votos_lula=("lula_13","sum"),votos_bolsonaro=("bolsonaro_22","sum"))
                   .reset_index())
 summary_uf_model["total_13_22"]=summary_uf_model["votos_lula"]+summary_uf_model["votos_bolsonaro"]
-denum=summary_uf_model["total_13_22"].astype(float).replace(0,float("nan"))\nsummary_uf_model["pct_lula"]=(100*summary_uf_model["votos_lula"]/denum).round(2)
+denum=summary_uf_model["total_13_22"].astype(float).replace(0,float("nan"))
+summary_uf_model["pct_lula"]=(100*summary_uf_model["votos_lula"]/denum).round(2)
 summary_uf_model["pct_bolsonaro"]=(100*summary_uf_model["votos_bolsonaro"]/denum).round(2)
 summary_uf_model.to_csv(OUT/"resumo_por_uf_e_modelo_nordeste.csv",index=False,encoding="utf-8-sig")
 
 winner=res["vencedor_13_22"].value_counts(dropna=False)
 with (OUT/"RESUMO_NORDESTE.txt").open("w",encoding="utf-8") as fh:
-    fh.write("Análise 2022 - Nordeste - 1º turno - UE2013/UE2015 com erros_log > 0\n")
-    fh.write(f"Seções encontradas: {len(res)}\n\n")
-    fh.write("Vencedor entre Lula e Bolsonaro por seção:\n")
+    fh.write("Análise 2022 - Nordeste - 1º turno - UE2013/UE2015 com erros_log > 0
+")
+    fh.write(f"Seções encontradas: {len(res)}
+
+")
+    fh.write("Vencedor entre Lula e Bolsonaro por seção:
+")
     fh.write(winner.to_string())
-    fh.write("\n\nResumo por modelo:\n")
+    fh.write("
+
+Resumo por modelo:
+")
     fh.write(summary_model.to_string(index=False))
-    fh.write("\n\nResumo por UF:\n")
+    fh.write("
+
+Resumo por UF:
+")
     fh.write(summary_uf.to_string(index=False))
-    fh.write("\n\nObservação: erros_log vem do .logjez da urna e NÃO é o mesmo que erro de transmissão/RecArquivos.\n")
+    fh.write("
+
+Observação: erros_log vem do .logjez da urna e NÃO é o mesmo que erro de transmissão/RecArquivos.
+")
 
 print(summary_model.to_string(index=False))
 print(summary_uf.to_string(index=False))
